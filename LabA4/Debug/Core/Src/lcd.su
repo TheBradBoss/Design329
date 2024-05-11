@@ -1,0 +1,7 @@
+../Core/Src/lcd.c:57:6:LCD_init	56	static
+../Core/Src/lcd.c:89:6:LCD_pulse_ENA	8	static
+../Core/Src/lcd.c:98:6:LCD_4b_command	16	static
+../Core/Src/lcd.c:106:6:LCD_command	16	static
+../Core/Src/lcd.c:125:6:LCD_write_char	16	static
+../Core/Src/lcd.c:134:6:LCD_write_string	24	static
+../Core/Src/lcd.c:143:6:LCD_write_time	24	static
