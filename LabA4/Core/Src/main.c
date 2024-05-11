@@ -27,7 +27,7 @@
  * 0.3 240430 BB  Met full criteria for part D operation.
  *******************************************************************************
  * TODO
- * Add a more reliable debounce mechanism to button press.
+ * Add a debounce mechanism to PBSW
  * Replace "state" var with enum type.
  * Add procedure for RNG failure in RNG function
  *******************************************************************************
@@ -102,6 +102,7 @@ void main(void)
 			LCD_write_string("PUSH SW TO TRIG");
 			state = 1;
 		}
+
 		while ( state == 1 ) {	// Wait to start game
 			if ( (GPIOC->IDR & GPIO_PIN_13) == GPIO_PIN_13 ) { 	// Button press
 				uint32_t rng_CCR1 = 0;					// Holds 32-bit RN
@@ -151,6 +152,7 @@ void main(void)
 
 			state = 5;
 		}
+
 		while ( state == 5 ) {	// Wait for user to reset after game
 			if ( (GPIOC->IDR & GPIO_PIN_13) == GPIO_PIN_13 ) { // Button press
 				delay_us(100000);	// for debounce
@@ -203,6 +205,7 @@ void TIM2_IRQHandler(void) {
 	}
 }
 ///////////////////////////////////////////////////////////////////////////////
+
 
 void SystemClock_Config(void)
 {
