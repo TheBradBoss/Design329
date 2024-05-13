@@ -1,0 +1,4 @@
+../Core/Src/keypad.c:62:6:Keypad_Config	56	static
+../Core/Src/keypad.c:98:5:Keypad_IsAnyKeyPressed	16	static
+../Core/Src/keypad.c:127:9:Keypad_WhichKeyIsPressed	72	static
+../Core/Src/keypad.c:167:9:Keypad_CheckKeyPressed	24	static

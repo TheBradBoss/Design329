@@ -1,0 +1,5 @@
+../Drivers/CMSIS/Include/core_cm4.h:2059:26:ITM_SendChar	4
+../Core/Src/main.c:35:6:main	3
+../Core/Src/main.c:74:6:SystemClock_Config	4
+../Core/Src/main.c:121:5:_write	2
+../Core/Src/main.c:138:6:Error_Handler	1
