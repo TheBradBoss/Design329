@@ -4,4 +4,4 @@
 ../Core/Src/lcd.c:106:6:LCD_command	3
 ../Core/Src/lcd.c:125:6:LCD_write_char	1
 ../Core/Src/lcd.c:134:6:LCD_write_string	2
-../Core/Src/lcd.c:143:6:LCD_write_time	3
+../Core/Src/lcd.c:143:6:LCD_write_volt	1

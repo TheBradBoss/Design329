@@ -26,12 +26,17 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <math.h>
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 
 
-char pad = 0;
+uint8_t pad = 0;
+uint8_t digit_count = 3;
+uint16_t millivolt = 0;
+//uint16_t dac_command = 0;
+
 void main(void)
 {
 
@@ -43,26 +48,45 @@ void main(void)
   LCD_init();
   DAC_init();
 
+  // DONT NEED LCD FOR A5, HERE FOR LOOKS
   delay_us(2000);
 	LCD_command( CURSOR_SHIFT_L );		// Shift cursor to the left
 	LCD_command( CURSOR_OFF );			// Display, cursor, position on
 	LCD_command( CURSOR_RIGHT );		// Cursor moves right, no shift
 	LCD_command( CLEAR_HOME );
-	LCD_write_string("EE 329 A4 REACT");
+	LCD_write_string("EE 329 A5 DAC");
 	LCD_command(LINE_TWO);
-	LCD_write_string("PUSH SW TO TRIG");
+	LCD_write_string("*=reset V=0.00V");
   //GPIOD->ODR = 0x3F;
   while (1)
   {
-	  for (int i = 0; i < 200000; i++){
-		  ;
-	  }
-	  printf("working\n");
-	  if ( Keypad_IsAnyKeyPressed() ) {
-		  printf("Got a signle button\n");
+
+
+
+	  if (Keypad_IsAnyKeyPressed()) {
 		  pad = Keypad_WhichKeyIsPressed();
-		  printf("Key is %c\n", pad);
-		  DAC_write ( 0x3FFF );
+		  printf("Key pressed is %d\n", pad);
+		  if ( pad == 42 ) {
+			  millivolt = 0;
+			  digit_count = 3;
+		  }
+		  else if ( (pad > 57) || (pad < 46) ) {
+			  ; // ignore key press
+		  }
+		  else {
+			  printf("Key pressed is %d\n", (pad-'0'));
+			  millivolt += ((pad - '0') * (pow(10, digit_count)));
+			  digit_count --;
+			  printf("Millivolt is %d\n", millivolt);
+
+		  }
+	  }
+	  if (digit_count == 0) {
+		  DAC_write( DAC_volt_conv( millivolt ) );
+		  printf("Command sent is %d\n", DAC_volt_conv( millivolt ));
+		  digit_count = 3;
+		  millivolt = 0;
+
 	  }
   }
 
@@ -162,3 +186,94 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* Code that takes three digit codes consecutively and outputs them up to Vdd.
+ * Does not include reset key or display of lcd
+ *  */
+//#include "main.h"
+//#include "keypad.h"
+//#include "lcd.h"
+//#include "delay.h"
+//#include "dac.h"
+//
+//
+//#include <stdio.h>
+//#include <stdint.h>
+//#include <math.h>
+//
+///* Private function prototypes -----------------------------------------------*/
+//void SystemClock_Config(void);
+//
+//
+//uint8_t pad = 0;
+//uint8_t digit_count = 3;
+//uint16_t millivolt = 0;
+////uint16_t dac_command = 0;
+//
+//void main(void)
+//{
+//
+//    /* Configure the system clock */
+//
+//	HAL_Init();
+//	SystemClock_Config();
+//  Keypad_Config();
+//  LCD_init();
+//  DAC_init();
+//
+//  delay_us(2000);
+//	LCD_command( CURSOR_SHIFT_L );		// Shift cursor to the left
+//	LCD_command( CURSOR_OFF );			// Display, cursor, position on
+//	LCD_command( CURSOR_RIGHT );		// Cursor moves right, no shift
+//	LCD_command( CLEAR_HOME );
+//	LCD_write_string("EE 329 A5 DAC");
+//	LCD_command(LINE_TWO);
+//	LCD_write_string("PUSH SW TO TRIG");
+//  //GPIOD->ODR = 0x3F;
+//  while (1)
+//  {
+//
+//
+//
+//	  if (Keypad_IsAnyKeyPressed()) {
+//		  pad = Keypad_WhichKeyIsPressed();
+//		  if ( (pad > 57) || (pad < 46) ) {
+//			  ; // ignore key press
+//		  }
+//		  else {
+//			  printf("Key pressed is %d\n", (pad-'0'));
+//			  millivolt += ((pad - '0') * (pow(10, digit_count)));
+//			  digit_count --;
+//			  printf("Millivolt is %d\n", millivolt);
+//
+//		  }
+//	  }
+//	  if (digit_count == 0) {
+//		  DAC_write( DAC_volt_conv( millivolt ) );
+//		  printf("Command sent is %d\n", DAC_volt_conv( millivolt ));
+//		  digit_count = 3;
+//		  millivolt = 0;
+//
+//	  }
+//  }
+//
+//
+//  /* USER CODE END 3 */
+//}

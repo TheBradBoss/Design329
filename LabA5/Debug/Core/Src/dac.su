@@ -1,4 +1,4 @@
 ../Core/Src/dac.c:26:6:DAC_init	32	static
-../Core/Src/dac.c:85:10:DAC_volt_conv	16	static
-../Core/Src/dac.c:89:6:DAC_write	24	static
-../Core/Src/dac.c:96:6:LPUART_ESC_print	24	static
+../Core/Src/dac.c:85:10:DAC_volt_conv	24	static
+../Core/Src/dac.c:100:6:DAC_write	24	static
+../Core/Src/dac.c:108:6:LPUART_ESC_print	24	static

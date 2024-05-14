@@ -140,20 +140,28 @@ void LCD_write_string( uint8_t sentence[] ) {
 }
 
 
-void LCD_write_time( uint32_t milli_s ) {
-	// Takes seconds and outputs time on LCD (N.SSS). Prints right to left
-	// SPECIFIC TO LAB A4 TIME LOCATION ON LCD
-
-	LCD_command(CURSOR_LEFT);					// Cursor moves left
-	LCD_command(0xCD);							// Cursor to last S in N.SSS
-	LCD_write_char( 's' );
-	LCD_write_char( ' ' );
-	for ( uint8_t i = 0; i < 4 ; i++ ) {
-		LCD_write_char( (milli_s % 10) + '0' );	// Print each digit
-		if ( i == 2 ) LCD_write_char( '.' );	// Add dot between s/ms
-		milli_s /= 10;							// Next left digit
-	}
-	LCD_command(CURSOR_RIGHT);
+void LCD_write_volt( uint16_t millivolt ) {
+//	// Takes seconds and outputs time on LCD (N.SSS). Prints right to left
+//	// SPECIFIC TO LAB A4 TIME LOCATION ON LCD
+//	LCD_command(CURSOR_LEFT);					// Cursor moves left
+//
+//
+//
+//
+//
+//
+//
+//	LCD_command(CURSOR_LEFT);					// Cursor moves left
+//	LCD_command(0xCD);							// Cursor to last S in N.SSS
+//	LCD_write_char( 's' );
+//	LCD_write_char( ' ' );
+//	for ( uint8_t i = 0; i < 4 ; i++ ) {
+//		LCD_write_char( (milli_s % 10) + '0' );	// Print each digit
+//		if ( i == 2 ) LCD_write_char( '.' );	// Add dot between s/ms
+//		milli_s /= 10;							// Next left digit
+//	}
+//	LCD_command(CURSOR_RIGHT);
+	;
 }
 
 //Include if you want to hack the LCD (prints constant garbage)

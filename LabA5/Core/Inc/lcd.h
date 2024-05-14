@@ -54,7 +54,7 @@ void LCD_4b_command		( uint8_t command ) ;
 void LCD_command		( uint8_t command ) ;
 void LCD_write_char		( uint8_t letter );
 void LCD_write_string	( uint8_t sentence[] );
-void LCD_write_time		( uint32_t milli_s );
+void LCD_write_volt		( uint16_t millivolt );
 
 
 #endif /* INC_LCD_H_ */
