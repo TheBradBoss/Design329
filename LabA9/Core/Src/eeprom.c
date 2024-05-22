@@ -10,12 +10,13 @@
 
 #include "stm32l496xx.h"
 
-#define EEPROM_PORT			GPIOB
-#define EEPROM_PORT_CLOCK	RCC_AHB2ENR_GPIOBEN
-#define EEPROM_NUM			2
-#define EEPROM_PINS			{8, 9}
-#define EEPROM_ADDRESS		0x52
-#define EEPROM_MEMORY_ADDR	0x1234
+//#define EEPROM_PORT			GPIOB
+//#define EEPROM_PORT_CLOCK	RCC_AHB2ENR_GPIOBEN
+//#define EEPROM_NUM			2
+//#define EEPROM_PINS			{8, 9}
+//#define EEPROM_ADDRESS		0x52
+//#define EEPROM_MEMORY_ADDR	0x1234
+//#define EEPROM_RNG			0xBB
 
 void 	EEPROM_init		( void );
 uint8_t EEPROM_read 	( uint16_t address );
@@ -96,7 +97,8 @@ uint8_t EEPROM_read (uint16_t address ) {
 	I2C1->CR2   &= ~( I2C_CR2_SADD );      // clear device address
 	I2C1->CR2   |=  ( EEPROM_ADDRESS << (I2C_CR2_SADD_Pos+1) ); // device addr SHL 1
 	I2C1->CR2   |=    I2C_CR2_START;       // start I2C READ op
-	while(!(I2C1->ISR & I2C_ISR_TXE)) ;   // wait for start condition to transmit
+	while(!(I2C1->ISR & I2C_ISR_RXNE)) ;   // wait for start condition to transmit
+	//while(!(I2C1->ISR & I2C_ISR_TXE)) ;   // wait for start condition to transmit
 	read_data = I2C1->RXDR;
 	return read_data;
 
@@ -120,7 +122,7 @@ void EEPROM_write (uint16_t address ) {
 	while(!(I2C1->ISR & I2C_ISR_TXE)) ;   // wait for start condition to transmit
 	I2C1->TXDR = (EEPROM_MEMORY_ADDR & 0xFF); // xmit LSByte of address
 	while(!(I2C1->ISR & I2C_ISR_TXE)) ;   // wait for start condition to transmit
-	I2C1->TXDR = (0xBB); // xmit data			/////////////////////////////////////////////////////////////////////////////
+	I2C1->TXDR = (EEPROM_RNG); // xmit data			/////////////////////////////////////////////////////////////////////////////
 	/* address high, address low, data  -  wait at least 5 ms before READ
 	   the READ op has new NBYTES (WRITE 2 then READ 1) & new RD_WRN for 3rd Byte */
 }

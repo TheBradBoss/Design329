@@ -40,7 +40,17 @@ int main(void)
   Keypad_Config();
 
 
+  	// LED 2 Configuration:
+  	// configure GPIO pin PB7 for:
+  	// output mode, no pull up or down, high speed,
+  	RCC->AHB2ENR   |=  (RCC_AHB2ENR_GPIOBEN);
+  	GPIOB->MODER &= ~(GPIO_MODER_MODE7);
+  	GPIOB->MODER |= (GPIO_MODER_MODE7_0);
+  	GPIOB->OTYPER  &= ~(GPIO_OTYPER_OT7);
+  	GPIOB->PUPDR   &= ~(GPIO_PUPDR_PUPD7);
+  	GPIOB->OSPEEDR |=  (3 << GPIO_OSPEEDR_OSPEED7_Pos);
 
+//	// Example for LED pin config
 //  GPIOC->MODER   &= ~(GPIO_MODER_MODE0 | GPIO_MODER_MODE1);		//Clears mode
 //  GPIOC->MODER   |=  (GPIO_MODER_MODE0_0 | GPIO_MODER_MODE1_0);	//Sets mode to 01
 //  GPIOC->OTYPER  &= ~(GPIO_OTYPER_OT0 | GPIO_OTYPER_OT1);		//Sets type to 0 (push/pull)
@@ -51,26 +61,32 @@ int main(void)
 
 
 
-//  void 	Keypad_Config 				( void );
-//  int 	Keypad_IsAnyKeyPressed		( void );
-//  uint8_t	Keypad_WhichKeyIsPressed 	( void );
-//  uint8_t Keypad_CheckKeyPressed 		( uint8_t iKey );
+
   uint8_t pad = 0;
 
   while (1)
   {
 	  if (Keypad_IsAnyKeyPressed()) {
 		  pad = Keypad_WhichKeyIsPressed();
-		  if (pad == '*') {
+		  if (pad == '1') {
+			  GPIOB->ODR &= ~(GPIO_PIN_7);
+		  }
+		  else if (pad == '2') {
+			  GPIOB->ODR |= (GPIO_PIN_7);
+		  }
+		  else if (pad == '*') {
 			  printf("we really good \n");
 				EEPROM_write(0xFFFF);
 		  }
-		  if (pad == '#') {
+		  else if (pad == '#') {
 			  printf("Got here\n");
 			  data = EEPROM_read(0xFFFF);
 			  printf("Data read %d\n", data);
 		  }
 		  printf("Key is %c\n", pad);
+	  }
+	  if (data == EEPROM_RNG) {
+		  GPIOB->ODR |= (GPIO_PIN_7);
 	  }
   }
 
