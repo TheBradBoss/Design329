@@ -48,7 +48,7 @@ void EEPROM_init( void ) {
 	I2C1->CR1   &= ~( I2C_CR1_PE );        // put I2C into reset (release SDA, SCL)
 	I2C1->CR1   &= ~( I2C_CR1_ANFOFF );    // filters: enable analog
 	I2C1->CR1   &= ~( I2C_CR1_DNF );       // filters: disable digital
-	I2C1->TIMINGR = 0x00303D5B;            // 16 MHz SYSCLK timing from CubeMX				// Need to change junk number
+	I2C1->TIMINGR = 0x00000509;            // 16 MHz SYSCLK timing from CubeMX				// Need to change junk number
 	I2C1->CR2   |=  ( I2C_CR2_AUTOEND );   // auto send STOP after transmission
 	I2C1->CR2   &= ~( I2C_CR2_ADD10 );     // 7-bit address mode
 	I2C1->CR1   |=  ( I2C_CR1_PE );        // enable I2C
