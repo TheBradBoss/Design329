@@ -10,6 +10,7 @@
 uint8_t	ADC_conversion_flag = 0;		// Flag set in ISR to get conversion
 uint16_t ADC_value1 = 0;
 
+
 void ADC_init( void ) {
 	RCC->AHB2ENR |= RCC_AHB2ENR_ADCEN;         // turn on clock for ADC
 	// power up & calibrate ADC
@@ -50,14 +51,42 @@ void ADC_init( void ) {
 
 }
 
-uint16_t ADC_sample( void ) {
-	uint16_t current_val = 0;
-	while( !ADC_conversion_flag ) // *global* await next ISR trip
-		;
-	ADC_conversion_flag = 0; // clr for next sample
-	current_val = ADC_value1;
-	ADC1->CR |= ADC_CR_ADSTART;// start conversion
-	return current_val;
+void ADC_sample( uint16_t *ave, uint16_t *min, uint16_t *max ) {
+	/* When called, this function will take 20 samples from the ADC and
+	 * return the maximum, minimum, and average of the samples. */
+
+
+	uint16_t sample[20];
+	uint16_t sample_min = 4096;
+	uint16_t sample_max = 0;
+	uint32_t sample_sum = 0;	// 32-bit to prevent overflow
+	uint16_t sample_ave = 0;	// 32-bit to prevent overflow
+
+
+	// Acquire samples first
+	for (int i = 0 ; i < 20 ; i++ ) {
+		while( !ADC_conversion_flag ) // *global* await next ISR trip
+			;
+		sample[i] = ADC_value1;
+		ADC_conversion_flag = 0; // clr for next sample
+		ADC1->CR |= ADC_CR_ADSTART;// start conversion
+	}
+
+	// Perform characterization operations.
+	for (int i = 0 ; i < 20 ; i++ ) {
+		if (sample[i] < sample_min) sample_min = sample[i];
+		if (sample[i] > sample_max) sample_max = sample[i];
+		sample_sum += sample[i];
+	}
+
+	*ave = (sample_sum / 20);
+	*min = sample_min;
+	*max = sample_max;
+}
+
+uint16_t ADC_raw_to_volt( uint16_t raw_sample ) {
+	/* Will include calibration later */
+	return (raw_sample * 3300) / 4095;
 }
 
 void ADC1_2_IRQHandler( void ) {

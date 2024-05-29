@@ -15,8 +15,8 @@
  *
  ******************************************************************************
  * CITATIONS:
- * chatGPT: I need c code that parses a 12 bit number into its four decimal digits
- *
+
+ * chatgpt: I need a function in c that takes in an array with 20 16-bit numbers and returns the average, maximum, and minimum of the numbers
  ******************************************************************************
  * NOTES:
  * lcd uses D pins 0-5
@@ -32,9 +32,9 @@
 
 
 void SystemClock_Config(void);
+void parse16Bit(uint16_t number, uint16_t digits[4]);
 
 
-uint16_t conv_results[20];	// Holds 20 samples 12-bit ADC conversions
 
 void main(void)
 {
@@ -52,30 +52,44 @@ void main(void)
 	GPIOC->MODER   &= ~(GPIO_MODER_MODE13);
 	GPIOC->PUPDR   |= (GPIO_PUPDR_PUPD13_1);
 
+
+	//uint16_t conv_results[20];	// Holds 20 samples 12-bit ADC conversions
+
+	// holds unconverted values
+	uint16_t raw_ave = 0;
+	uint16_t raw_min = 0;
+	uint16_t raw_max = 0;
+
+	// In millivolts
+	uint16_t volt_ave = 0;
+	uint16_t volt_min = 0;
+	uint16_t volt_max = 0;
+
+
 	while (1)
 	{
-		delay_us(1000);
-		for (int i = 0 ; i < 20 ; i++) {
-			conv_results[i] = ADC_sample();
-			printf("Results %d is %d\n", i, conv_results[i]);
-		}
+		delay_us(3000);
+		ADC_sample( &raw_ave, &raw_min, &raw_max);
+		printf("Raw Average: %d\n", raw_ave);
+		printf("Raw Minimum: %d\n", raw_min);
+		printf("Raw Maximum: %d\n", raw_max);
+		volt_ave = ADC_raw_to_volt(raw_ave);
+		volt_min = ADC_raw_to_volt(raw_min);
+		volt_max = ADC_raw_to_volt(raw_max);
+		printf("Volt Average: %d\n", volt_ave);
+		printf("Volt Minimum: %d\n", volt_min);
+		printf("Volt Maximum: %d\n", volt_max);
 	}
 
 }
 
 
-void parse12BitNumber(unsigned int number, int digits[4]) {
-    // Ensure the number is within 12-bit range
-    if (number > 0xFFF) {
-        printf("Error: Number exceeds 12-bit range.\n");
-        return;
-    }
-
+void parse16Bit(uint16_t number, uint16_t digits[4]) {
     // Extract each digit
-    digits[0] = (number / 1000) % 10;  // Thousands place
-    digits[1] = (number / 100) % 10;   // Hundreds place
-    digits[2] = (number / 10) % 10;    // Tens place
-    digits[3] = number % 10;           // Units place
+    digits[0] = (number / 1000) % 10;  // Thousands
+    digits[1] = (number / 100) % 10;   // Hundreds
+    digits[2] = (number / 10) % 10;    // Tens
+    digits[3] = number % 10;           // Units
 }
 
 void SystemClock_Config(void)
