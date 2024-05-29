@@ -17,6 +17,7 @@
  * CITATIONS:
 
  * chatgpt: I need a function in c that takes in an array with 20 16-bit numbers and returns the average, maximum, and minimum of the numbers
+ * chat: I need a c program that turns 15 into the string "15"
  ******************************************************************************
  * NOTES:
  * lcd uses D pins 0-5
@@ -29,11 +30,18 @@
 #include "adc.h"
 #include "delay.h"
 #include <stdio.h>
+#include <stdint.h>
+
+#define BUTTON1_PORT	GPIOC
+#define BUTTON1_I	GPIO_PIN_13
 
 
 void SystemClock_Config(void);
-void parse16Bit(uint16_t number, uint16_t digits[4]);
+uint8_t button1(void);
+char* parse4DigitsToString(uint16_t number );
 
+// Declare global variable
+uint8_t debounce_state = 0;	// If key is currently pressed ==1
 
 
 void main(void)
@@ -42,8 +50,8 @@ void main(void)
 	SystemClock_Config();
 	SysTick_Init();
 
-
-	ADC_init();
+	LPUART_init();
+	//ADC_init();
 
 	// User Button Configuration to command relay:
 	// configure GPIO pin PC13 for:
@@ -65,31 +73,123 @@ void main(void)
 	uint16_t volt_min = 0;
 	uint16_t volt_max = 0;
 
+	LPUART_ESC_print("[2J");
+	LPUART_ESC_print("[H");
+
 
 	while (1)
 	{
-		delay_us(3000);
-		ADC_sample( &raw_ave, &raw_min, &raw_max);
-		printf("Raw Average: %d\n", raw_ave);
-		printf("Raw Minimum: %d\n", raw_min);
-		printf("Raw Maximum: %d\n", raw_max);
-		volt_ave = ADC_raw_to_volt(raw_ave);
-		volt_min = ADC_raw_to_volt(raw_min);
-		volt_max = ADC_raw_to_volt(raw_max);
-		printf("Volt Average: %d\n", volt_ave);
-		printf("Volt Minimum: %d\n", volt_min);
-		printf("Volt Maximum: %d\n", volt_max);
+
+
+		if (button1()) {
+			//LPUART_move_cursor(10,10);
+
+//			LPUART_ESC_print("[10;");
+//			LPUART_print("10H");  // works
+
+
+//			LPUART_ESC_print("["); // doesnt work
+//			//LPUART_print(51);
+//			LPUART_print("B");
+
+
+			uint16_t number = 10;
+			char* output;
+			//parse4DigitsToString(number, output);
+			output = parse4DigitsToString(number);
+
+			LPUART_ESC_print("[");
+			LPUART_print(output);
+			LPUART_print(";");
+			LPUART_print(output);
+			LPUART_print("H");
+
+			LPUART_ESC_print("[3B");
+			LPUART_print(output);
+			//LPUART_print("Bradley did it kinda");
+
+
+		}
+//		delay_us(3000);
+//		ADC_sample( &raw_ave, &raw_min, &raw_max);
+//		printf("Raw Average: %d\n", raw_ave);
+//		printf("Raw Minimum: %d\n", raw_min);
+//		printf("Raw Maximum: %d\n", raw_max);
+//		volt_ave = ADC_raw_to_volt(raw_ave);
+//		volt_min = ADC_raw_to_volt(raw_min);
+//		volt_max = ADC_raw_to_volt(raw_max);
+//		printf("Volt Average: %d\n", volt_ave);
+//		printf("Volt Minimum: %d\n", volt_min);
+//		printf("Volt Maximum: %d\n", volt_max);
 	}
 
 }
 
 
-void parse16Bit(uint16_t number, uint16_t digits[4]) {
+//void parse4DigitsToString(uint16_t number, char str[]) {
+//    // Extract each digit
+//	uint16_t digits[4];
+//
+//    digits[0] = (number / 1000) % 10;  // Thousands
+//    digits[1] = (number / 100) % 10;   // Hundreds
+//    digits[2] = (number / 10) % 10;    // Tens
+//    digits[3] = number % 10;           // Units
+//
+//    for (int i = 0 ; i < 4 ; i++) {
+//    	str[i] = digits[i] + '0';
+//    }
+//    str[4] = '\0';
+//}
+
+char* parse4DigitsToString(uint16_t number ) {
     // Extract each digit
+	static char str[5];
+	uint16_t digits[4];
+
     digits[0] = (number / 1000) % 10;  // Thousands
     digits[1] = (number / 100) % 10;   // Hundreds
     digits[2] = (number / 10) % 10;    // Tens
     digits[3] = number % 10;           // Units
+
+    for (int i = 0 ; i < 4 ; i++) {
+    	str[i] = digits[i] + '0';
+    }
+    str[4] = '\0';
+    return str;
+}
+
+//void parse16BitToString(uint16_t number, uint16_t digits[4]) {
+//    // Extract each digit
+//    digits[0] = (number / 1000) % 10;  // Thousands
+//    digits[1] = (number / 100) % 10;   // Hundreds
+//    digits[2] = (number / 10) % 10;    // Tens
+//    digits[3] = number % 10;           // Units
+//
+//}
+
+uint8_t button1(void) {
+	// Debounce function for buttons.
+	// Add appropriate defines in main.h
+	uint16_t settle = 1000;	// Small delay for debounce to settle
+	uint16_t debounce_count = 0;
+	if ( debounce_state == 0 ) {
+		while ( (BUTTON1_PORT->IDR & BUTTON1_I) != 0 ) {	// Button pressed
+			debounce_count++;
+			if ( debounce_count > settle ) {			// Button high for awhile
+				debounce_state = 1;
+				return 1;
+			}
+		}
+		return 0;
+	}
+	if ( debounce_state == 1 ) {	// Button was pressed
+		if ( (BUTTON1_PORT->IDR & BUTTON1_I) == 0 ) {		// Button released
+			debounce_state = 0;
+			return 0;
+		}
+		else return  0;
+	}
+
 }
 
 void SystemClock_Config(void)

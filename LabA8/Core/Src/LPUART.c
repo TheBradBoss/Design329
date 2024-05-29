@@ -20,6 +20,7 @@ void LPUART_ESC_print( const char* message);
 void LPUART1_IRQHandler( void  );
 void GAME_character(void);
 void GAME_background(void);
+void LPUART_move_cursor ( uint8_t x_location, uint8_t y_location );
 
 
 /* Global variables */
@@ -82,13 +83,31 @@ void LPUART_print( const char* message) {
 }
 
 void LPUART_move_cursor ( uint8_t x_location, uint8_t y_location ) {
-	char str[20];
-	sprintf(str, "[%d;%dH", y_location, x_location);
-	LPUART_ESC_print(str);
+	/* Only accepts coordinates less than 100 */
 
+
+
+
+	LPUART_ESC_print("[");
+	if ( ((y_location / 10)%10) != 0 ) {
+		LPUART_print('0' + ((y_location / 10)%10));
+	}
+	LPUART_print('0' + (y_location % 10));
+	LPUART_print(";");
+	if ( ((x_location / 10)%10) != 0 ) {
+		LPUART_print('0' + ((x_location / 10)%10));
+	}
+	LPUART_print('0' + (x_location % 10));
+	LPUART_print("H");
+}
+
+void digitToString(int digit, char str[]) {
+    str[0] = digit + '0'; // Convert the digit to its ASCII representation
+    str[1] = '\0';        // Add null terminator to make it a valid string
 }
 
 void LPUART_ESC_print( const char* message) {
+	// sends the ESC command for user
 	uint16_t iStrIdx = 0;
 	while(!(LPUART1->ISR & USART_ISR_TXE)) // wait for empty xmit buffer
 		;
@@ -106,29 +125,17 @@ void LPUART1_IRQHandler( void  ) {
 	if (LPUART1->ISR & USART_ISR_RXNE) {
 		charRecv = LPUART1->RDR;	// Reading RDR resets receive process.
 		switch ( charRecv ) {
-//		case 'R':
-//			LPUART_ESC_print("[31m");
-//			break;
-//		case 'G':
-//			LPUART_ESC_print("[32m");
-//			break;
-//		case 'B':
-//			LPUART_ESC_print("[34m");
-//			break;
-//		case 'W':
-//			LPUART_ESC_print("[37m");
-//			break;
-		case 'a':
-			flag_left = 1;
+		case 'R':
+			LPUART_ESC_print("[31m");
 			break;
-		case 'd':
-			flag_right = 1;
+		case 'G':
+			LPUART_ESC_print("[32m");
 			break;
-		case 'w':
-			flag_up = 1;
+		case 'B':
+			LPUART_ESC_print("[34m");
 			break;
-		case 's':
-			flag_down = 1;
+		case 'W':
+			LPUART_ESC_print("[37m");
 			break;
 		default:
 			while( !(LPUART1->ISR & USART_ISR_TXE) )
@@ -163,87 +170,6 @@ prs \\_//
 */
 	; // nothing
 }
-//
-//void SystemClock_Config(void)
-//{
-//	RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-//	RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-//
-//	/** Configure the main internal regulator output voltage
-//	 */
-//	if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
-//	{
-//		Error_Handler();
-//	}
-//
-//	/** Initializes the RCC Oscillators according to the specified parameters
-//	 * in the RCC_OscInitTypeDef structure.
-//	 */
-//	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
-//	RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-//	RCC_OscInitStruct.MSICalibrationValue = 0;
-//	RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_6;
-//	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-//	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-//	{
-//		Error_Handler();
-//	}
-//
-//	/** Initializes the CPU, AHB and APB buses clocks
-//	 */
-//	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-//			|RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-//	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
-//	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-//	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-//	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-//
-//	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
-//	{
-//		Error_Handler();
-//	}
-//}
-//
-//int _write(int file, char *ptr, int len)
-//{
-//	(void)file;
-//	int DataIdx;
-//
-//	for (DataIdx = 0; DataIdx < len; DataIdx++)
-//	{
-//		ITM_SendChar(*ptr++);
-//	}
-//	return len;
-//}
-//
-//void Error_Handler(void)
-//{
-//	/* USER CODE BEGIN Error_Handler_Debug */
-//	/* User can add his own implementation to report the HAL error return state */
-//	__disable_irq();
-//	while (1)
-//	{
-//	}
-//	/* USER CODE END Error_Handler_Debug */
-//}
-//
-//#ifdef  USE_FULL_ASSERT
-///**
-// * @brief  Reports the name of the source file and the source line number
-// *         where the assert_param error has occurred.
-// * @param  file: pointer to the source file name
-// * @param  line: assert_param error line source number
-// * @retval None
-// */
-//void assert_failed(uint8_t *file, uint32_t line)
-//{
-//	/* USER CODE BEGIN 6 */
-//	/* User can add his own implementation to report the file name and line number,
-//     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-//	/* USER CODE END 6 */
-//}
-//#endif /* USE_FULL_ASSERT */
-
 
 
 
