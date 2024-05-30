@@ -16,8 +16,7 @@ void ADC_init( void ) {
 	// power up & calibrate ADC
 
 	RCC->PLLCFGR |= 0x2;	// PLLSRC clock source = HSI16 (16 MHz)
-
-	ADC123_COMMON->CCR |= (1 << ADC_CCR_CKMODE_Pos); // clock source = HCLK/1
+	ADC123_COMMON->CCR |= (1 << ADC_CCR_CKMODE_Pos); // clock = HCLK/1 = 16*8
 
 	ADC1->CR &= ~(ADC_CR_DEEPPWD);             // disable deep-power-down
 	ADC1->CR |= (ADC_CR_ADVREGEN);             // enable V regulator - see RM 18.4.6
@@ -34,6 +33,8 @@ void ADC_init( void ) {
 	// configure ADC sampling & sequencing
 	ADC1->SQR1  |= (5 << ADC_SQR1_SQ1_Pos);    // sequence = 1 conv., ch 5
 	ADC1->SMPR1 |= (1 << ADC_SMPR1_SMP5_Pos);  // ch 5 sample time = 6.5 clocks
+	//ADC1->SMPR1 |= (4 << ADC_SMPR1_SMP5_Pos);  // ch 5 sample time = 47.5 clocks
+	//ADC1->SMPR1 |= (7 << ADC_SMPR1_SMP5_Pos);  // ch 5 sample time = 640.5 clocks
 	ADC1->CFGR  &= ~( ADC_CFGR_CONT  |         // single conversion mode
 	                  ADC_CFGR_EXTEN |         // h/w trig disabled for s/w trig
 	                  ADC_CFGR_RES   );        // 12-bit resolution
@@ -60,7 +61,6 @@ void ADC_sample( uint16_t *ave, uint16_t *min, uint16_t *max ) {
 	uint16_t sample_min = 4096;
 	uint16_t sample_max = 0;
 	uint32_t sample_sum = 0;	// 32-bit to prevent overflow
-	uint16_t sample_ave = 0;	// 32-bit to prevent overflow
 
 
 	// Acquire samples first
@@ -86,7 +86,13 @@ void ADC_sample( uint16_t *ave, uint16_t *min, uint16_t *max ) {
 
 uint16_t ADC_raw_to_volt( uint16_t raw_sample ) {
 	/* Will include calibration later */
-	return (raw_sample * 3300) / 4095;
+	//return (raw_sample * 3300) / 4095;
+
+
+//	uint32_t conversion = ((raw_sample * 8092) - 13805) / 10000000;
+//	return conversion;
+
+	return ((raw_sample * 8092) - 13805) / 10000;
 }
 
 void ADC1_2_IRQHandler( void ) {

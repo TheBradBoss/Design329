@@ -10,4 +10,7 @@
 
 #include <stm32l496xx.h>
 
+#define CLEAR_SCREEN	"[2J"
+#define RETURN_CURSOR	"[H"
+
 #endif /* INC_LPUART_H_ */
