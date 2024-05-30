@@ -29,6 +29,8 @@
 #include "main.h"
 #include "adc.h"
 #include "delay.h"
+#include "LPUART.h"
+
 #include <stdio.h>
 #include <stdint.h>
 
@@ -83,6 +85,7 @@ void main(void)
 	uint16_t volt_ave = 0;
 	uint16_t volt_min = 0;
 	uint16_t volt_max = 0;
+	uint16_t volt_bar = 0;
 
 	uint8_t display_count = 0;
 	uint16_t coil_current = 0;
@@ -108,22 +111,40 @@ void main(void)
 
 		delay_us(1000);
 		ADC_sample( &raw_ave, &raw_min, &raw_max);
-		printf("Raw Average: %d\n", raw_ave);
-		printf("Raw Minimum: %d\n", raw_min);
-		printf("Raw Maximum: %d\n", raw_max);
+//		printf("Raw Average: %d\n", raw_ave);
+//		printf("Raw Minimum: %d\n", raw_min);
+//		printf("Raw Maximum: %d\n", raw_max);
 		volt_ave = ADC_raw_to_volt(raw_ave);
 		volt_min = ADC_raw_to_volt(raw_min);
 		volt_max = ADC_raw_to_volt(raw_max);
-		printf("Volt Average: %d\n", volt_ave);
-		printf("Volt Minimum: %d\n", volt_min);
-		printf("Volt Maximum: %d\n", volt_max);
+//		printf("Volt Average: %d\n", volt_ave);
+//		printf("Volt Minimum: %d\n", volt_min);
+//		printf("Volt Maximum: %d\n", volt_max);
 
 		if (display_count > 200) {	// update display every few seconds
 
-			coil_current = (volt_ave * 1000) / 16000;
+			if (GPIOC->IDR & GPIO_PIN_13) {
+				// Ie
+				coil_current = (volt_ave*1000)/16294;
+			}
+			else {
+				// Ie - Ib
+				coil_current = ((volt_ave*1000)/16294) - ((3300000-(700000+(volt_ave*1000)))/553050);	// Ie - Ib
+			}
+
+			volt_bar = ((volt_ave / 100)) + 1;
 
 			LPUART_ESC_print("[2J");
 			LPUART_ESC_print("[H");
+
+			LPUART_ESC_print("[6;10H");
+			for (int i = 0; i < volt_bar; i++) {
+				LPUART_print("#");
+			}
+			LPUART_ESC_print("[7;10H");
+			LPUART_print("|----|----|----|----|----|----|");
+			LPUART_ESC_print("[8;10H");
+			LPUART_print("0   0.5  1.0  1.5  2.0  2.5  3.0");
 			LPUART_ESC_print("[10;10H");	// Cursor at about center
 			LPUART_print("ADC counts volts");
 			LPUART_ESC_print("[11;10H");
