@@ -1,9 +1,58 @@
 /* USER CODE BEGIN Header */
 /**
  ******************************************************************************
- * @file           : main.c
- * @brief          : Main program body
+ * @file        : main.c
+ * @brief       : Switch relay coild & use ADC to measure coil current
+ * project		: EE 329 S'24 Lab A8
+ * authors		: Bradley Buzzini, Jack Ryan
+ * version		: 0.3
+ * date			: 240530
+ * computer		: STM32CubeIDE v.1.15.1 Build: 21094_20240412_1041 (UTC)
+ * target		: NUCLEO-L496ZG
+ * clock		: 4 MHz MSI to AHB2
+ *
+ * Citations:
+ * OpenAI. (2024-Apr-08). ChatGPT, query synopsis "Write code in c that
+ * 	 converts a 4 digit decimal to a string" to  https://chat.openai.com/chat
+ * Sample Code from A8 Manual
  ******************************************************************************
+ * REVISION HISTORY
+ * 0.1 240528 BB  Able to receive and aggregate ADC samples
+ * 0.2 240529 BB  Implemented LPUART.c
+ * 0.3 240530 BB  Added extra credit
+ *******************************************************************************
+ * TODO
+ *
+ *******************************************************************************
+ * PIN DESCRIPTIONS
+ *      peripherals – Nucleo I/O
+ * BJT NPN1 Emitter - PA0 = CN10 - 29 - analog mode, ADC
+ * BJT NPN1    Base - PA1 = CN10 - 11 - OUT
+ * BJT NPN2    Base - PA2 = CN10 - 13 - OUT
+ * Emitter Resistor - GND = CN9  - 23
+ *******************************************************************************
+ * BREADBOARD
+ * Repeat the following for each relay coil:
+ *   Connect NPN as a pulldown in series with the relay coil (collector to (-))
+ *   Add a flyback diode in parallel with the coil for protection
+ *   Choose a base and emitter resistance with the 'rule of ten' (560 and 16)
+ *   Connect PA1 or PA2 in series with the base resistance
+ *   Connect ground to the bottom of the emitter resistance
+ *   Connect +5V to the positive terminal of the relay coil
+ *   Use the ADC to measure emitter resistor voltage
+ *******************************************************************************
+ * DISPLAY EXAMPLE
+ * 		####
+ * 		|----|----|----|----|----|----|
+ * 		0   0.5  1.0  1.5  2.0  2.5  3.0
+ *
+ * 		ADC counts volts
+ * 		MIN  0381  0.307 V
+ * 		MAX  0383  0.308 V
+ * 		AVG  0382  0.307 V
+ * 		coil current = 0.085 A
+ *
+ *******************************************************************************
  * @attention
  *
  * Copyright (c) 2024 STMicroelectronics.
@@ -14,16 +63,6 @@
  * If no LICENSE file comes with this software, it is provided AS-IS.
  *
  ******************************************************************************
- * CITATIONS:
-
- * chatgpt: I need a function in c that takes in an array with 20 16-bit numbers and returns the average, maximum, and minimum of the numbers
- * chat: I need a c program that turns 15 into the string "15"
- ******************************************************************************
- * NOTES:
- * lcd uses D pins 0-5
- * keypad uses C pins 0-8
- ******************************************************************************
- */
 /* USER CODE END Header */
 
 #include "main.h"
@@ -34,218 +73,144 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#define BUTTON1_PORT	GPIOC
-#define BUTTON1_I	GPIO_PIN_13
-
-
 void SystemClock_Config(void);
 uint8_t button1(void);
-char* countToString(uint16_t number );
-char* voltToString(uint16_t number );
+void DisplayResults ( void );
 
-// Declare global variable
+/* Declare global variables */
 uint8_t debounce_state = 0;	// If key is currently pressed ==1
 
+// holds ADC digital output
+uint16_t adc_avg = 0;
+uint16_t adc_min = 0;
+uint16_t adc_max = 0;
+
+// holds ADC digital output converted to millivolts
+uint16_t volt_avg = 0;
+uint16_t volt_min = 0;
+uint16_t volt_max = 0;
+uint16_t volt_bar = 0;	// EC: bar length
+
+uint16_t coil_current = 0;	// Current held in millamps
 
 void main(void)
 {
+	// System Initialization
 	HAL_Init();
 	SystemClock_Config();
 	SysTick_Init();
-
 	LPUART_init();
 	ADC_init();
 
-	// User Button Configuration to command relay:
-	// configure GPIO pin PC13 for:
+	// User Button (PC13) Configuration to command relay:
 	// input mode, with pull down
 	RCC->AHB2ENR   |=  (RCC_AHB2ENR_GPIOCEN);
 	GPIOC->MODER   &= ~(GPIO_MODER_MODE13);
 	GPIOC->PUPDR   |= (GPIO_PUPDR_PUPD13_1);
 
-
+	// Configure relay coil control pins PA1 & PA2:
+	// Output, push/pull, no PD/PU, high speed
 	RCC->AHB2ENR   |=  (RCC_AHB2ENR_GPIOAEN);
-	GPIOA->MODER   &= ~(GPIO_MODER_MODE2 | GPIO_MODER_MODE1);		//Clears mode
-	GPIOA->MODER   |=  (GPIO_MODER_MODE2_0 | GPIO_MODER_MODE1_0);	//Sets mode to 01
-	GPIOA->OTYPER  &= ~(GPIO_OTYPER_OT2 | GPIO_OTYPER_OT1);		//Sets type to 0 (push/pull)
-	GPIOA->PUPDR   &= ~(GPIO_PUPDR_PUPD2 | GPIO_PUPDR_PUPD1);		//Sets to 00(No PU or PD)
-	GPIOA->OSPEEDR |=  ((3 << GPIO_OSPEEDR_OSPEED2_Pos) |			//Very High Speed
+	GPIOA->MODER   &= ~(GPIO_MODER_MODE2 | GPIO_MODER_MODE1);
+	GPIOA->MODER   |=  (GPIO_MODER_MODE2_0 | GPIO_MODER_MODE1_0);
+	GPIOA->OTYPER  &= ~(GPIO_OTYPER_OT2 | GPIO_OTYPER_OT1);
+	GPIOA->PUPDR   &= ~(GPIO_PUPDR_PUPD2 | GPIO_PUPDR_PUPD1);
+	GPIOA->OSPEEDR |=  ((3 << GPIO_OSPEEDR_OSPEED2_Pos) |
 			(3 << GPIO_OSPEEDR_OSPEED1_Pos));
-	GPIOA->BRR = (GPIO_PIN_2 | GPIO_PIN_1); // preset PC0, PC1 to 0
-
-
-	//uint16_t conv_results[20];	// Holds 20 samples 12-bit ADC conversions
-
-	// holds unconverted values
-	uint16_t raw_ave = 0;
-	uint16_t raw_min = 0;
-	uint16_t raw_max = 0;
-
-	// In millivolts
-	uint16_t volt_ave = 0;
-	uint16_t volt_min = 0;
-	uint16_t volt_max = 0;
-	uint16_t volt_bar = 0;
+	GPIOA->BRR = (GPIO_PIN_2 | GPIO_PIN_1);
 
 	uint8_t display_count = 0;
-	uint16_t coil_current = 0;
 
-	LPUART_ESC_print("[2J");
-	LPUART_ESC_print("[H");
-
+	LPUART_ESC_print(CLEAR_SCREEN);
+	LPUART_ESC_print(RETURN_CURSOR);
 
 	while (1)
 	{
-
-
-		if (GPIOC->IDR & GPIO_PIN_13) {
-			GPIOA->ODR |= GPIO_PIN_1;
-			GPIOA->ODR &= ~(GPIO_PIN_2);
-		}
-		else {
-			GPIOA->ODR |= GPIO_PIN_2;
-			GPIOA->ODR &= ~(GPIO_PIN_1);
-		}
-
-		display_count++;
-
 		delay_us(1000);
-		ADC_sample( &raw_ave, &raw_min, &raw_max);
-//		printf("Raw Average: %d\n", raw_ave);
-//		printf("Raw Minimum: %d\n", raw_min);
-//		printf("Raw Maximum: %d\n", raw_max);
-		volt_ave = ADC_raw_to_volt(raw_ave);
-		volt_min = ADC_raw_to_volt(raw_min);
-		volt_max = ADC_raw_to_volt(raw_max);
-//		printf("Volt Average: %d\n", volt_ave);
-//		printf("Volt Minimum: %d\n", volt_min);
-//		printf("Volt Maximum: %d\n", volt_max);
 
-		if (display_count > 200) {	// update display every few seconds
+		// Collect and aggregate ADC samples
+		ADC_sample( &adc_avg, &adc_min, &adc_max);
+		volt_avg = ADC_raw_to_volt(adc_avg);
+		volt_min = ADC_raw_to_volt(adc_min);
+		volt_max = ADC_raw_to_volt(adc_max);
+		volt_bar = ((volt_avg / 100)) + 1;	// EC: Extra credit
 
-			if (GPIOC->IDR & GPIO_PIN_13) {
-				// Ie
-				coil_current = (volt_ave*1000)/16294;
-			}
-			else {
-				// Ie - Ib
-				coil_current = ((volt_ave*1000)/16294) - ((3300000-(700000+(volt_ave*1000)))/553050);	// Ie - Ib
-			}
-
-			volt_bar = ((volt_ave / 100)) + 1;
-
-			LPUART_ESC_print("[2J");
-			LPUART_ESC_print("[H");
-
-			LPUART_ESC_print("[6;10H");
-			for (int i = 0; i < volt_bar; i++) {
-				LPUART_print("#");
-			}
-			LPUART_ESC_print("[7;10H");
-			LPUART_print("|----|----|----|----|----|----|");
-			LPUART_ESC_print("[8;10H");
-			LPUART_print("0   0.5  1.0  1.5  2.0  2.5  3.0");
-			LPUART_ESC_print("[10;10H");	// Cursor at about center
-			LPUART_print("ADC counts volts");
-			LPUART_ESC_print("[11;10H");
-			LPUART_print("MIN  ");
-			LPUART_print(countToString(raw_min));
-			LPUART_print("  ");
-			LPUART_print(voltToString(volt_min));
-			LPUART_print(" V");
-			LPUART_ESC_print("[12;10H");
-			LPUART_print("MAX  ");
-			LPUART_print(countToString(raw_max));
-			LPUART_print("  ");
-			LPUART_print(voltToString(volt_max));
-			LPUART_print(" V");
-			LPUART_ESC_print("[13;10H");
-			LPUART_print("AVG  ");
-			LPUART_print(countToString(raw_ave));
-			LPUART_print("  ");
-			LPUART_print(voltToString(volt_ave));
-			LPUART_print(" V");
-			LPUART_ESC_print("[H");
-			LPUART_ESC_print("[14;10H");
-			LPUART_print("coil current = ");
-			LPUART_print(voltToString(coil_current));
-			LPUART_print(" A");
+		if (display_count > 200) {	// update serial display occasionally
+			DisplayResults();
 			display_count = 0;
 		}
+		display_count++;
+
+		if (button1()) {	// Switch coil one way
+			GPIOA->ODR |= GPIO_PIN_1;
+			GPIOA->ODR &= ~(GPIO_PIN_2);
+			coil_current = ((volt_avg*1000)/16294) -
+					((3300000-(700000+(volt_avg*1000)))/553050);	// Ie - Ib
+		}
+		else {				// Switch coil other way
+			GPIOA->ODR |= GPIO_PIN_2;
+			GPIOA->ODR &= ~(GPIO_PIN_1);
+			coil_current = (volt_avg*1000)/16294;	// NPN OFF: Ib = 0
+
+		}
+
+		if (display_count > 200) {	// update serial display occasionally
+			display_count = 0;
+		}
+		display_count++;
 	}
-
-
-
 }
 
+void DisplayResults ( void ) {
+	LPUART_ESC_print(CLEAR_SCREEN);
+	LPUART_ESC_print(RETURN_CURSOR);
 
-//void parse4DigitsToString(uint16_t number, char str[]) {
-//    // Extract each digit
-//	uint16_t digits[4];
-//
-//    digits[0] = (number / 1000) % 10;  // Thousands
-//    digits[1] = (number / 100) % 10;   // Hundreds
-//    digits[2] = (number / 10) % 10;    // Tens
-//    digits[3] = number % 10;           // Units
-//
-//    for (int i = 0 ; i < 4 ; i++) {
-//    	str[i] = digits[i] + '0';
-//    }
-//    str[4] = '\0';
-//}
+	// Extra credit
+	LPUART_ESC_print("[6;10H");
+	for (int i = 0; i < volt_bar; i++) {
+		LPUART_print("#");
+	}
+	//
 
-char* countToString(uint16_t number ) {
-    // Extract each digit
-	static char str[5];
-	uint16_t digits[4];
-
-    digits[0] = (number / 1000) % 10;  // Thousands
-    digits[1] = (number / 100) % 10;   // Hundreds
-    digits[2] = (number / 10) % 10;    // Tens
-    digits[3] = number % 10;           // Units
-
-    for (int i = 0 ; i < 4 ; i++) {
-    	str[i] = digits[i] + '0';
-    }
-    str[4] = '\0';
-    return str;
+	LPUART_ESC_print("[7;10H");	// Move cursor to about center
+	LPUART_print("|----|----|----|----|----|----|");
+	LPUART_ESC_print("[8;10H");
+	LPUART_print("0   0.5  1.0  1.5  2.0  2.5  3.0");
+	LPUART_ESC_print("[10;10H");
+	LPUART_print("ADC counts volts");
+	LPUART_ESC_print("[11;10H");
+	LPUART_print("MIN  ");
+	LPUART_print(ADC_CountToString(adc_min));
+	LPUART_print("  ");
+	LPUART_print(ADC_VoltToString(volt_min));
+	LPUART_print(" V");
+	LPUART_ESC_print("[12;10H");
+	LPUART_print("MAX  ");
+	LPUART_print(ADC_CountToString(adc_max));
+	LPUART_print("  ");
+	LPUART_print(ADC_VoltToString(volt_max));
+	LPUART_print(" V");
+	LPUART_ESC_print("[13;10H");
+	LPUART_print("AVG  ");
+	LPUART_print(ADC_CountToString(adc_avg));
+	LPUART_print("  ");
+	LPUART_print(ADC_VoltToString(volt_avg));
+	LPUART_print(" V");
+	LPUART_ESC_print(RETURN_CURSOR);
+	LPUART_ESC_print("[14;10H");
+	LPUART_print("coil current = ");
+	LPUART_print(ADC_VoltToString(coil_current));
+	LPUART_print(" A");
 }
-
-char* voltToString(uint16_t number ) {
-    // Extract each digit
-	static char str[6];
-	uint16_t digits[4];
-
-    digits[0] = (number / 1000) % 10;  // Thousands
-    digits[1] = (number / 100) % 10;   // Hundreds
-    digits[2] = (number / 10) % 10;    // Tens
-    digits[3] = number % 10;           // Units
-
-    str[0] = digits[0] + '0';
-    str[1] = '.';
-    for (int i = 1 ; i < 4 ; i++) {
-    	str[i+1] = digits[i] + '0';
-    }
-    str[5] = '\0';
-    return str;
-}
-
-//void parse16BitToString(uint16_t number, uint16_t digits[4]) {
-//    // Extract each digit
-//    digits[0] = (number / 1000) % 10;  // Thousands
-//    digits[1] = (number / 100) % 10;   // Hundreds
-//    digits[2] = (number / 10) % 10;    // Tens
-//    digits[3] = number % 10;           // Units
-//
-//}
 
 uint8_t button1(void) {
 	// Debounce function for buttons.
-	// Add appropriate defines in main.h
-	uint16_t settle = 1000;	// Small delay for debounce to settle
-	uint16_t debounce_count = 0;
+	// Change BUTTON defines in main.h
+	uint16_t settle = 1000;			// Small delay for debounce to settle
+	uint16_t debounce_count = 0;	// Compare to settle time
+
 	if ( debounce_state == 0 ) {
-		while ( (BUTTON1_PORT->IDR & BUTTON1_I) != 0 ) {	// Button pressed
+		while ( (BUTTON1_PORT->IDR & BUTTON1_IO) != 0 ) {	// Button pressed
 			debounce_count++;
 			if ( debounce_count > settle ) {			// Button high for awhile
 				debounce_state = 1;
@@ -255,13 +220,12 @@ uint8_t button1(void) {
 		return 0;
 	}
 	if ( debounce_state == 1 ) {	// Button was pressed
-		if ( (BUTTON1_PORT->IDR & BUTTON1_I) == 0 ) {		// Button released
+		if ( (BUTTON1_PORT->IDR & BUTTON1_IO) == 0 ) {		// Button released
 			debounce_state = 0;
 			return 0;
 		}
 		else return  0;
 	}
-
 }
 
 void SystemClock_Config(void)
