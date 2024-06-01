@@ -22,10 +22,10 @@
  *******************************************************************************
  * KEYPAD WIRING 4 ROWS 4 COLS (pinout NUCLEO-L496ZG = L4A6ZG)
  *      peripheral – Nucleo I/O
- * keypad 1  COL 2 - PC1 = CN10- 2 - OUT
+ * keypad 1  COL 2 - PC1 = CN8 - 7 - OUT
  * keypad 2  ROW 1 - PC4 = CN9 -21 - IN, PD ON
  * keypad 3  COL 1 - PC0 = CN7 -20 - OUT
- * keypad 4  ROW 4 - PC8 = CN8 -14 - IN, PD ON
+ * keypad 4  ROW 4 - PC8 = CN8 -2  - IN, PD ON
  * keypad 5  COL 3 - PC2 = CN10- 8 - OUT
  * keypad 6  ROW 3 - PC6 = CN9 -17 - IN, PD ON
  * keypad 7  ROW 2 - PC5 = CN9 -19 - IN, PD ON

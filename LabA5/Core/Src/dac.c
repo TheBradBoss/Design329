@@ -1,35 +1,49 @@
-/*
- * dac.c
- *
- *  Created on: May 11, 2024
- *      Author: bradl
- */
+/* USER CODE BEGIN Header */
+/*******************************************************************************
+ * @file           : dac.c
+ * @brief          : DAC configuration and millivolt input to output
+ * project         : EE 329 S'24 Assignment 6
+ * author(s)       : Bradley Buzzini, Daniel Hoefer
+ * version         : 0.2
+ * date            : 240517
+ * compiler        : STM32CubeIDE v.1.15.1 Build: 21094_20240412_1041 (UTC)
+ * target          : NUCLEO-L496ZG
+ * clocks          : 4 MHz MSI to AHB2
+ * @attention      : (c) 2024 STMicroelectronics.  All rights reserved.
+ *******************************************************************************
+ * DAC PLAN :
+ * Set STM32 as controller
+ * Configure pins to SPI alternate functions.
+ * Convert millivolts to 12-bit DAC data.
+ * Calibrate DAC performance
+ * Write to data register when TXE is ready.
+ *******************************************************************************
+ * DAC WIRING (pinout NUCLEO-L496ZG = L4A6ZG)
+ *      peripheral – Nucleo I/O
+ * DAC 1 - VDD	 - 3V3 = CN8 - 7
+ * DAC 2 - ~CS   - PA4 = CN7 - 9 - OUT, AF5
+ * DAC 3 - SCK   - PA5 = CN7 - 10- OUT, AF5
+ * DAC 4 - SDI   - PA7 = CN7 - 14- OUT, AF5
+ * DAC 5 - ~LDAC - GND = CN9 - 23
+ * DAC 6 - ~SHDN - 3V3 = CN8 - 7
+ * DAC 7 - VSS   - GND = CN9 - 23
+ * DAC 8 - VOUT
+ *******************************************************************************
+ * REVISION HISTORY
+ * 0.1 240513 BB  Includes up to deliverable 5
+ * 0.2 240516 DH  Calibrated and added code to test DAC performance.
+ *******************************************************************************
+ * REFERENCES
+ * Code adapted from A5 in lab manual
+ *******************************************************************************
+/* USER CODE END Header */
 
 #include "dac.h"
 
-//#include <stdint.h>
-
-
-
-#define DAC_PORT		GPIOA
-#define DAC_PORT_CLOCK	RCC_AHB2ENR_GPIOAEN
-#define DAC_NUM			3
-#define DAC_PINS		{4, 5, 7}	// GPIO Port pins
-
-
-// Function declarations
-void 		DAC_init (void);
-uint16_t 	DAC_volt_conv( uint16_t voltage );
-void		DAC_write ( uint16_t voltage_12bit );
-
-
 void DAC_init (void) {
 	// enable clock for GPIOA & SPI1
-	RCC->AHB2ENR |= (DAC_PORT_CLOCK);                // GPIOA: DAC NSS/SCK/SDO
-	RCC->APB2ENR |= (RCC_APB2ENR_SPI1EN);                 // SPI1 port
-
-	/* USER ADD GPIO configuration of MODER/PUPDR/OTYPER/OSPEEDR registers HERE */
-
+	RCC->AHB2ENR |= (DAC_PORT_CLOCK);    	// GPIOA: DAC NSS/SCK/SDO
+	RCC->APB2ENR |= (RCC_APB2ENR_SPI1EN);  	// SPI1 port
 
 	uint32_t dac_pins[] = DAC_PINS;
 	for (uint32_t i = 0; i < DAC_NUM ; i++) {
@@ -44,215 +58,65 @@ void DAC_init (void) {
 		DAC_PORT->BRR |= (0x1 << (pin * 1));	//initialize off
 		GPIOA->AFR[0] &= ~((0x000F << (pin * 4))); // clear for 4 AF
 		GPIOA->AFR[0] |=  ((0x0005 << (pin * 4))); // set A4 AF to SPI1 (fcn 5)
-
+		//Pin A4: configure AFR for SPI1_NSS function
+		//Pin A5: configure AFR for SPI1_SCK function
+		//Pin A7: configure AFR for SPI1_MOSI function
 	}
-
-
 	// SPI config as specified @ STM32L4 RM0351 rev.9 p.1459
-	// called by or with DAC_init()
 	// build control registers CR1 & CR2 for SPI control of peripheral DAC
 	// assumes no active SPI xmits & no recv data in process (BSY=0)
 	// CR1 (reset value = 0x0000)
 	SPI1->CR1 &= ~( SPI_CR1_SPE );             	// disable SPI for config
 	SPI1->CR1 &= ~( SPI_CR1_RXONLY );          	// recv-only OFF
 	SPI1->CR1 &= ~( SPI_CR1_LSBFIRST );        	// data bit order MSb:LSb
-	SPI1->CR1 &= ~( SPI_CR1_CPOL | SPI_CR1_CPHA ); // SCLK polarity:phase = 0:0 // clock should be low in idle state
-	SPI1->CR1 |=	 SPI_CR1_MSTR;              	// MCU is SPI controller
+	SPI1->CR1 &= ~( SPI_CR1_CPOL | SPI_CR1_CPHA ); // SCLK polarity:phase = 0:0
+	SPI1->CR1 |=	 SPI_CR1_MSTR;              	// MCU is SPI controller(master)
 	// CR2 (reset value = 0x0700 : 8b data)
-	SPI1->CR2 &= ~( SPI_CR2_TXEIE | SPI_CR2_RXNEIE ); // disable FIFO intrpts
-	SPI1->CR2 &= ~( SPI_CR2_FRF);              	// Moto frame format
+	SPI1->CR2 &= ~( SPI_CR2_TXEIE | SPI_CR2_RXNEIE ); // disable FIFO intrpts??
+	SPI1->CR2 &= ~( SPI_CR2_FRF);              	// Motorola frame format
 	SPI1->CR2 |=	 SPI_CR2_NSSP;              	// auto-generate NSS pulse
 	SPI1->CR2 |=	 SPI_CR2_DS;                	// 16-bit data
 	SPI1->CR2 |=	 SPI_CR2_SSOE;              	// enable SS(slave select CS) output
-	// CR1
 	SPI1->CR1 |=	 SPI_CR1_SPE;               	// re-enable SPI for ops
-
-
-
-
-//	// Pin A4: configure AFR for SPI1_NSS function
-//	GPIOA->AFR[0] &= ~((0x000F << GPIO_AFRL_AFSEL4_Pos)); // clear for 4 AF
-//	GPIOA->AFR[0] |=  ((0x0005 << GPIO_AFRL_AFSEL4_Pos)); // set A4 AF to SPI1 (fcn 5)
-//	// Pin A5: configure AFR for SPI1_SCK function
-//	GPIOA->AFR[0] &= ~((0x000F << GPIO_AFRL_AFSEL5_Pos)); // clear for 5 AF
-//	GPIOA->AFR[0] |=  ((0x0005 << GPIO_AFRL_AFSEL5_Pos)); // set A5 AF to SPI1 (fcn 5)
-//	// Pin A7: configure AFR for SPI1_MOSI function
-//	GPIOA->AFR[0] &= ~((0x000F << GPIO_AFRL_AFSEL7_Pos)); // clear for bit 7 AF
-//	GPIOA->AFR[0] |=  ((0x0005 << GPIO_AFRL_AFSEL7_Pos)); // set A7 AF to SPI1 (fcn 5)
-
 }
 
-uint16_t DAC_volt_conv( uint16_t millivolt ) {
-	// Takes user entered voltage in mV, outputs 16-bit control and data code
-	uint16_t data = 0;
-
-	if (millivolt > 3300) {
-		return (0x1000 + 3300*1);		// Max output (G=2)
-	}
-	else if (millivolt > 2047) {
-		return (0x1000 + millivolt*1); 	// Gain = 2
-	}
-	else {
-		return (0x3000 + millivolt*2); 	// Gain = 1
-	}
-}
-
-void DAC_write ( uint16_t voltage_12bit ) {
-	uint16_t red = voltage_12bit;
-	while(!(SPI1->SR & SPI_SR_TXE))
-		;	// Hold when TXE bit is zero
-	//SPI1->DR = 0x36A7;
-	SPI1->DR = voltage_12bit;
-
-}
-void LPUART_ESC_print(const char* keycode){
-	uint16_t iStrIdx = 0;
-	while(!(LPUART1->ISR & USART_ISR_TXE)) // wait for empty xmit buffer
-				;
-	LPUART1->TDR = 0x1B;
-	while ( keycode[iStrIdx] != 0 ) {
-		while(!(LPUART1->ISR & USART_ISR_TXE)) // wait for empty xmit buffer
-			;
-		LPUART1->TDR = keycode[iStrIdx];       // send this character
-		iStrIdx++;                             // advance index to next char
-	}
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* Code that takes three digit codes consecutively and outputs them up to Vdd.
- * Does not include reset key or display of lcd
- *  */
-///*
-// * dac.c
-// *
-// *  Created on: May 11, 2024
-// *      Author: bradl
-// */
-//
-//#include "dac.h"
-//
-////#include <stdint.h>
-//
-//
-//
-//#define DAC_PORT		GPIOA
-//#define DAC_PORT_CLOCK	RCC_AHB2ENR_GPIOAEN
-//#define DAC_NUM			3
-//#define DAC_PINS		{4, 5, 7}	// GPIO Port pins
-//
-//
-//// Function declarations
-//void 		DAC_init (void);
-//uint16_t 	DAC_volt_conv( uint16_t voltage );
-//void		DAC_write ( uint16_t voltage_12bit );
-//
-//
-//void DAC_init (void) {
-//	// enable clock for GPIOA & SPI1
-//	RCC->AHB2ENR |= (DAC_PORT_CLOCK);                // GPIOA: DAC NSS/SCK/SDO
-//	RCC->APB2ENR |= (RCC_APB2ENR_SPI1EN);                 // SPI1 port
-//
-//	/* USER ADD GPIO configuration of MODER/PUPDR/OTYPER/OSPEEDR registers HERE */
-//
-//
-//	uint32_t dac_pins[] = DAC_PINS;
-//	for (uint32_t i = 0; i < DAC_NUM ; i++) {
-//		uint32_t pin = dac_pins[i];
-//		DAC_PORT->MODER &= ~(0x3 << (pin * 2));
-//		DAC_PORT->MODER |= (0x2 << (pin * 2));
-//		DAC_PORT->OTYPER &= ~(0x1 << pin);
-//		DAC_PORT->OTYPER |= (0x0 << pin);
-//		DAC_PORT->OSPEEDR &= ~(0x3 << (pin * 2));
-//		DAC_PORT->OSPEEDR |= (0x3 << (pin * 2));//Highest speed
-//		DAC_PORT->PUPDR &= ~(0x3 << (pin * 2));
-//		DAC_PORT->BRR |= (0x1 << (pin * 1));	//initialize off
-//		GPIOA->AFR[0] &= ~((0x000F << (pin * 4))); // clear for 4 AF
-//		GPIOA->AFR[0] |=  ((0x0005 << (pin * 4))); // set A4 AF to SPI1 (fcn 5)
-//
-//	}
-//
-//
-//	// SPI config as specified @ STM32L4 RM0351 rev.9 p.1459
-//	// called by or with DAC_init()
-//	// build control registers CR1 & CR2 for SPI control of peripheral DAC
-//	// assumes no active SPI xmits & no recv data in process (BSY=0)
-//	// CR1 (reset value = 0x0000)
-//	SPI1->CR1 &= ~( SPI_CR1_SPE );             	// disable SPI for config
-//	SPI1->CR1 &= ~( SPI_CR1_RXONLY );          	// recv-only OFF
-//	SPI1->CR1 &= ~( SPI_CR1_LSBFIRST );        	// data bit order MSb:LSb
-//	SPI1->CR1 &= ~( SPI_CR1_CPOL | SPI_CR1_CPHA ); // SCLK polarity:phase = 0:0 // clock should be low in idle state
-//	SPI1->CR1 |=	 SPI_CR1_MSTR;              	// MCU is SPI controller
-//	// CR2 (reset value = 0x0700 : 8b data)
-//	SPI1->CR2 &= ~( SPI_CR2_TXEIE | SPI_CR2_RXNEIE ); // disable FIFO intrpts
-//	SPI1->CR2 &= ~( SPI_CR2_FRF);              	// Moto frame format
-//	SPI1->CR2 |=	 SPI_CR2_NSSP;              	// auto-generate NSS pulse
-//	SPI1->CR2 |=	 SPI_CR2_DS;                	// 16-bit data
-//	SPI1->CR2 |=	 SPI_CR2_SSOE;              	// enable SS(slave select CS) output
-//	// CR1
-//	SPI1->CR1 |=	 SPI_CR1_SPE;               	// re-enable SPI for ops
-//
-//
-//
-//
-////	// Pin A4: configure AFR for SPI1_NSS function
-////	GPIOA->AFR[0] &= ~((0x000F << GPIO_AFRL_AFSEL4_Pos)); // clear for 4 AF
-////	GPIOA->AFR[0] |=  ((0x0005 << GPIO_AFRL_AFSEL4_Pos)); // set A4 AF to SPI1 (fcn 5)
-////	// Pin A5: configure AFR for SPI1_SCK function
-////	GPIOA->AFR[0] &= ~((0x000F << GPIO_AFRL_AFSEL5_Pos)); // clear for 5 AF
-////	GPIOA->AFR[0] |=  ((0x0005 << GPIO_AFRL_AFSEL5_Pos)); // set A5 AF to SPI1 (fcn 5)
-////	// Pin A7: configure AFR for SPI1_MOSI function
-////	GPIOA->AFR[0] &= ~((0x000F << GPIO_AFRL_AFSEL7_Pos)); // clear for bit 7 AF
-////	GPIOA->AFR[0] |=  ((0x0005 << GPIO_AFRL_AFSEL7_Pos)); // set A7 AF to SPI1 (fcn 5)
-//
-//}
-//
 //uint16_t DAC_volt_conv( uint16_t millivolt ) {
 //	// Takes user entered voltage in mV, outputs 16-bit control and data code
+//	// Outputs ideal Dn for desired Vout.
+//	// For deliverable 7 pre-calibration
 //	uint16_t data = 0;
 //
 //	if (millivolt > 3300) {
-//		return (0x100 + 3300*1)			// Max output
+//		return (DAC_GAIN2 + 3300);	// Max Output Given
 //	}
 //	else if (millivolt > 2047) {
-//		return (0x1000 + millivolt*1); 	// Gain = 2
+//		return (DAC_GAIN2 + (millivolt)*1);	// Ideal word
 //	}
 //	else {
-//		return (0x3000 + millivolt*2); 	// Gain = 1
+//		return (DAC_GAIN1 + (millivolt)*2);	// Ideal word
 //	}
 //}
-//
-//void DAC_write ( uint16_t voltage_12bit ) {
-//	uint16_t red = voltage_12bit;
-//	while(!(SPI1->SR & SPI_SR_TXE))
-//		;	// Hold when TXE bit is zero
-//	//SPI1->DR = 0x36A7;
-//	SPI1->DR = voltage_12bit;
-//
-//}
-//void LPUART_ESC_print(const char* keycode){
-//	uint16_t iStrIdx = 0;
-//	while(!(LPUART1->ISR & USART_ISR_TXE)) // wait for empty xmit buffer
-//				;
-//	LPUART1->TDR = 0x1B;
-//	while ( keycode[iStrIdx] != 0 ) {
-//		while(!(LPUART1->ISR & USART_ISR_TXE)) // wait for empty xmit buffer
-//			;
-//		LPUART1->TDR = keycode[iStrIdx];       // send this character
-//		iStrIdx++;                             // advance index to next char
-//	}
-//}
+
+uint16_t DAC_volt_conv( uint16_t millivolt ) {
+	// Takes user entered voltage in mV, outputs 16-bit control and data code
+	// Includes calibration
+
+	if (millivolt > 3300) {
+		//return (DAC_GAIN2 + 0x0FFF);	// Try to get maximum output
+		return (DAC_GAIN2 + (uint16_t)(((3300*100000) + 447000) / 100426));	// 3.3 V out
+	}
+	else if (millivolt > 2047) {
+		// Scale equation to avoid float operations
+		return (DAC_GAIN2 + (uint16_t)(((millivolt*100000) + 447000) / 100426));
+	}
+	else {
+		// Scale equation to avoid float operations
+		return (DAC_GAIN1 + (uint16_t)(((millivolt*100000) - 153733) / 50114));	// G = 1
+	}
+}
+
+void DAC_write ( uint16_t voltage_16bit ) {
+	while(!(SPI1->SR & SPI_SR_TXE))
+		;	// Hold when TXE bit is zero
+	SPI1->DR = voltage_16bit;
+}

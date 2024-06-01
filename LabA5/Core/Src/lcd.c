@@ -20,11 +20,11 @@
  * LCD WIRING 4-BIT CONFIGURATION (pinout NUCLEO-L496ZG = L4A6ZG)
  *      peripheral – Nucleo I/O
  * lcd 4  RS - PD5 = CN - OUT, PD ON
- * lcd 6  E  - PD4 = CN  - OUT, PD ON
+ * lcd 6  E  - PD4 = CN - OUT, PD ON
  * lcd 11 DB4- PD0 = CN - OUT, PD ON
  * lcd 12 DB5- PD1 = CN - OUT, PD ON
  * lcd 13 DB6- PD2 = CN - OUT, PD ON
- * lcd 14 DB7- PD3 = CN  - OUT, PD ON
+ * lcd 14 DB7- PD3 = CN - OUT, PD ON
  *
  * Note: DB pins must be lowest 4 of port
  *******************************************************************************
