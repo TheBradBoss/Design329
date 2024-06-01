@@ -2,7 +2,7 @@
 /**
  ******************************************************************************
  * @file        : main.h
- * @brief       : Switch relay coild & use ADC to measure coil current
+ * @brief       : Switch relay coil & use ADC to measure coil current
  * project		: EE 329 S'24 Lab A8
  * authors		: Bradley Buzzini, Jack Ryan
  * version		: 0.3

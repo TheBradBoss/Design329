@@ -22,7 +22,7 @@
  * 0.3 240530 BB  Added extra credit
  *******************************************************************************
  * TODO
- *
+ * nada
  *******************************************************************************
  * PIN DESCRIPTIONS
  *      peripherals – Nucleo I/O
@@ -69,9 +69,6 @@
 #include "adc.h"
 #include "delay.h"
 #include "LPUART.h"
-
-#include <stdio.h>
-#include <stdint.h>
 
 void SystemClock_Config(void);
 uint8_t button1(void);
