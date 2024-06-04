@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "delay.h"
+#include "adc.h"
 
 /* Interrupt */
 #define TIME_UP		0xFFFFFFFF				// ARR initialize val
@@ -56,8 +57,16 @@ uint8_t interrupt_flag = 0;
 
 
 uint32_t test_sense = 0;
+uint32_t grab_count = 0;
 uint8_t speed_flag = 0;
 
+// holds ADC digital output
+uint16_t adc_avg_throttle = 0;		// Ch. 5 = PA0
+uint16_t adc_avg_current = 0;		// Ch. 7 = PA2
+
+// holds ADC digital output converted to millivolts
+uint16_t volt_avg_throttle = 0;	// Ch. 5 = PA0
+uint16_t volt_avg_current = 0;	// Ch. 7 = PA2
 
 void main(void)
 {
@@ -66,6 +75,7 @@ void main(void)
 	SystemClock_Config();
 	setup_TIM2(CCR1_VALUE);
 	setup_EXTI1();
+	ADC_init();
 
 
 
@@ -75,16 +85,6 @@ void main(void)
 	RCC->AHB2ENR   |=  (RCC_AHB2ENR_GPIOCEN);
 	GPIOC->MODER   &= ~(GPIO_MODER_MODE13);
 	GPIOC->PUPDR   |= (GPIO_PUPDR_PUPD13_1);
-
-
-
-	// Configure Interrupt Pin A1:
-	// Input. no PU/PD, push/pull,
-	RCC->AHB2ENR   |=  (RCC_AHB2ENR_GPIOAEN);
-	GPIOA->MODER   &= ~(GPIO_MODER_MODE1);
-	GPIOA->PUPDR   &= ~(GPIO_PUPDR_PUPD1);
-	GPIOA->PUPDR |= GPIO_PUPDR_PUPD1_1;
-
 
 
 	// Configure LED
@@ -97,6 +97,8 @@ void main(void)
 	GPIOB->BRR = (GPIO_PIN_1);
 
 	uint32_t speed_result = 0;
+	uint32_t amp = 0;
+	uint32_t watt = 0;
 
 	while (1)
 	{
@@ -115,17 +117,35 @@ void main(void)
 
 
 
-		// PBSW if
+		// PBSW pressed
 		if (GPIOC->IDR & GPIO_PIN_13) {
 			//GPIOB->ODR |= GPIO_PIN_1;
 			printf("Rot count = %d\n", test_sense);
 			speed_result = HALL_speed();
 			printf("speed result %d\n", speed_result);
 			//GPIOB->ODR &= ~(GPIO_PIN_1);	// off
+			printf("Wattage is %d\n", watt);
+			printf("AVG Throttle V: %d\n", volt_avg_throttle);
+			printf("AVG Current V: %d\n", volt_avg_current);
+			GPIOB->ODR |= GPIO_PIN_1;
+
+
+
 		}
 		else {
-			//GPIOB->ODR &= ~(GPIO_PIN_1);
+			GPIOB->ODR &= ~(GPIO_PIN_1);
 		}
+
+
+
+		ADC_sample( &adc_avg_throttle, &adc_avg_current);
+		volt_avg_throttle = ADC_raw_to_volt(adc_avg_throttle);
+		volt_avg_current = ADC_raw_to_volt(adc_avg_current);
+
+		// 50 mV drop per Amp, offset by 2.508 V (result in mA)
+		amp = ((2508 - volt_avg_current) * 1000) / 50;
+		watt = (52 * amp) / 1000;
+
 	}
 
 }
@@ -147,6 +167,8 @@ uint32_t HALL_speed( void ) {
 	uint32_t frequency = 0;
 
 	uint16_t settle = 100;			// Small delay for debounce to settle
+	uint16_t stop_time = 10000;		// No action for long time
+	uint16_t stop_count = 0;
 	uint16_t debounce_count = 0;	// Compare to settle time
 	uint8_t unsettled = 1;			// HALL still high
 
@@ -166,9 +188,14 @@ uint32_t HALL_speed( void ) {
 	unsettled = 1;
 	EXTI->IMR1 |= EXTI_IMR1_IM1;	// Enable EXTI1 interrupts
 	while( speed_flag == 0 ) {
+		stop_count++;
+		if (stop_count > stop_time) {
+			return 0;	// Exit if bike not moving (no interrupt in time)
+		}
 		; // Wait for first rise detection from ISR
 	}
-	previous_count = TIM2->CNT;
+	previous_count = grab_count;
+	stop_count = 0;
 	speed_flag = 0;
 
 	while( unsettled == 1 ) {	// Wait till HALL low again
@@ -185,9 +212,14 @@ uint32_t HALL_speed( void ) {
 	EXTI->IMR1 |= EXTI_IMR1_IM1;	// Enable EXTI1 interrupts
 
 	while( speed_flag == 0 ) {
+		stop_count++;
+		if (stop_count > stop_time) {
+			return 0;	// Exit if bike not moving (no interrupt in time)
+		}
 		; // Wait for second rise detection from ISR
 	}
-	current_count = TIM2->CNT;
+	current_count = grab_count;
+	stop_count = 0;
 	speed_flag = 0;
 
 	time_per_sense = (current_count - previous_count) / 4; // micro s
@@ -216,20 +248,26 @@ uint32_t HALL_speed( void ) {
 ///////////////////////////////////////////////////////////////////////////////
 // ISR EXTI1 (PA1) CODE
 void setup_EXTI1( void ) {
+	// Configure Interrupt Pin A1:
+	// Input. PD, push/pull,
+	RCC->AHB2ENR   |=  (RCC_AHB2ENR_GPIOAEN);
+	GPIOA->MODER   &= ~(GPIO_MODER_MODE1);
+	GPIOA->PUPDR   &= ~(GPIO_PUPDR_PUPD1);
+	GPIOA->PUPDR |= GPIO_PUPDR_PUPD1_1;
+
 	EXTI->IMR1 |= EXTI_IMR1_IM1;	// Enable EXTI1 interrupts
 	EXTI->RTSR1 |= EXTI_RTSR1_RT1;	// Trigger on RISE
-	SYSCFG->EXTICR[0] &= ~(0x0);	// PA[1] -> Line 1
+	SYSCFG->EXTICR[0] &= ~(0xF);	// PA1 -> Line 1
 	NVIC->ISER[0] |= (1 << (EXTI1_IRQn & 0x1F));	// set NVIC interrupt: 0x1F
 	__enable_irq();                                 // global IRQ enable
-
-
 }
 
 void EXTI1_IRQHandler (void) {
 	if (EXTI->PR1 & EXTI_PR1_PIF1) {	// Line 1 interrupt?
+		grab_count = TIM2->CNT;
 		speed_flag = 1;
 		test_sense++;
-		printf("stuck here?\n");
+		//printf("stuck here?\n");
 		EXTI->PR1 |= EXTI_PR1_PIF1; // cleared by setting
 	}
 	EXTI->IMR1 &= ~(EXTI_IMR1_IM1);	// Disable EXTI1 interrupts
