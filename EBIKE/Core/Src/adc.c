@@ -94,7 +94,9 @@ void ADC_init( void ) {
 
 void ADC_sample( uint16_t *avg_5, uint16_t *avg_7 ) {
 	/* When called, this function will take 20 samples from the ADC and
-	 * return the raw maximum, minimum, and average of the samples. */
+	 * return the raw maximum, minimum, and average of the samples.
+	 * Causes ADC interrupts to occur; they should not occur outside
+	 * this function. */
 	uint16_t sample[20];
 	uint32_t sample_sum_5 = 0;	// ch.5
 	uint32_t sample_sum_7 = 0;	// ch.7
